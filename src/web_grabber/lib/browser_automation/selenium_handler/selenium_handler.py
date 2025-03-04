@@ -7,7 +7,6 @@ from typing import Dict, List, Tuple
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
 from web_grabber.lib.browser_automation.base import BrowserAutomation
@@ -85,7 +84,7 @@ class SeleniumBrowser(BrowserAutomation):
         self, url: str, wait_for_js: bool = True, scroll: bool = True
     ) -> Tuple[str, Dict[str, List[str]]]:
         """
-        Get the content of a page using Selenium.
+        Get the content of a page, including HTML and resource URLs.
 
         Args:
             url (str): The URL to fetch
@@ -95,74 +94,84 @@ class SeleniumBrowser(BrowserAutomation):
         Returns:
             Tuple[str, Dict[str, List[str]]]: HTML content and resources
         """
-        if not self.driver:
-            self._initialize_driver()
-
-        logger.info(f"Fetching URL with Selenium: {url}")
+        # Dictionary to store resources
         resources = {"images": [], "videos": [], "documents": []}
 
         try:
+            logger.info(f"Fetching URL with Selenium: {url}")
+
+            # First check if the URL points to a non-HTML resource
+            resource_type = self.get_file_type(url)
+            if resource_type != "html" and resource_type != "skip":
+                logger.info(f"URL {url} appears to be a {resource_type} file, not HTML")
+                self.add_failed_url(url)
+                return "", resources
+
+            # Load the page
             self.driver.get(url)
 
             # Wait for page to load
             if wait_for_js:
-                # Wait for document ready state
-                WebDriverWait(self.driver, 10).until(
-                    lambda d: d.execute_script("return document.readyState")
-                    == "complete"
-                )
+                try:
+                    # Wait for the page to be considered loaded
+                    WebDriverWait(self.driver, 10).until(
+                        lambda d: d.execute_script("return document.readyState")
+                        == "complete"
+                    )
+                except TimeoutException:
+                    logger.warning(f"Timeout waiting for page to load: {url}")
 
+            # Scroll if requested
             if scroll:
-                # Scroll to load lazy content
                 self._scroll_page()
 
-            # Extract resources from page
+            # Get the page source
             html_content = self.driver.page_source
+
+            # Check if the content is valid HTML
+            if not html_content or not self._is_valid_html(html_content):
+                logger.warning(f"Content from {url} doesn't appear to be valid HTML")
+                self.add_failed_url(url)
+                return html_content, resources
+
+            # Extract resources
             resources = self.get_resources(url, html_content)
 
-            # Find resources in src attributes
-            elements_with_src = self.driver.find_elements(By.CSS_SELECTOR, "[src]")
-            for element in elements_with_src:
-                src = element.get_attribute("src")
-                if src:
-                    src = self.normalize_url(url, src)
-                    resource_type = self.get_file_type(src)
-                    if resource_type in resources:
-                        resources[resource_type].append(src)
-
-            # Find resources in href attributes (for documents)
-            elements_with_href = self.driver.find_elements(By.CSS_SELECTOR, "a[href]")
-            for element in elements_with_href:
-                href = element.get_attribute("href")
-                if href:
-                    href = self.normalize_url(url, href)
-                    resource_type = self.get_file_type(href)
-                    if resource_type == "documents" and resource_type != "skip":
-                        # Check for document patterns
-                        if (
-                            href.lower().endswith((".pdf", ".doc", ".docx"))
-                            or "/resume" in href.lower()
-                        ):
-                            resources[resource_type].append(href)
-
-            # Deduplicate resources
-            for resource_type in resources:
-                resources[resource_type] = list(set(resources[resource_type]))
-
             return html_content, resources
-
-        except TimeoutException as e:
-            logger.error(f"Timeout fetching {url}: {e}")
-            self.add_failed_url(url)
-            return "", resources
         except WebDriverException as e:
-            logger.error(f"WebDriver error fetching {url}: {e}")
+            logger.error(f"WebDriver error for {url}: {e}")
             self.add_failed_url(url)
             return "", resources
         except Exception as e:
-            logger.error(f"Error fetching {url}: {e}")
+            logger.error(f"Error fetching {url} with Selenium: {e}")
             self.add_failed_url(url)
             return "", resources
+
+    def _is_valid_html(self, content: str) -> bool:
+        """
+        Check if content appears to be valid HTML.
+
+        Args:
+            content: String content to check
+
+        Returns:
+            bool: True if content appears to be HTML, False otherwise
+        """
+        if not content:
+            return False
+
+        # Check for PDF signature
+        if content.startswith("%PDF-"):
+            return False
+
+        # Check for common HTML markers
+        lower_content = content.lower()
+        return (
+            "<!doctype html" in lower_content[:1000]
+            or "<html" in lower_content[:1000]
+            or "<head" in lower_content[:1000]
+            or "<body" in lower_content[:1000]
+        )
 
     def _scroll_page(self) -> None:
         """Scroll the page to load lazy-loaded content."""

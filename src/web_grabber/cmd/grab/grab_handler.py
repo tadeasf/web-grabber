@@ -11,8 +11,6 @@ from typing import Any, Dict, Optional, Set
 
 from web_grabber.lib.browser_automation import (
     BrowserAutomation,
-    CamoufoxBrowser,
-    SeleniumBrowser,
 )
 from web_grabber.lib.network import (
     HttpxHandler,
@@ -129,6 +127,17 @@ class GrabHandler:
             return False
 
         try:
+            # Verify resource type again - it's possible that the initial detection was wrong
+            detected_type = BrowserAutomation.get_file_type(url)
+
+            # If the detected type doesn't match the requested type, use the detected type
+            # This prevents HTML being downloaded as PDF, etc.
+            if detected_type != resource_type and detected_type != "skip":
+                logger.warning(
+                    f"Changing resource type from {resource_type} to {detected_type} for {url}"
+                )
+                resource_type = detected_type
+
             # Handle file organization based on resource type
             if resource_type == "html":
                 # HTML files stay in /html
@@ -157,6 +166,42 @@ class GrabHandler:
                     else ".html"
                 )
                 filename = f"{url_hash}{ext}"
+            else:
+                # Check if the extension matches the resource type
+                _, ext = os.path.splitext(filename)
+                if resource_type == "images" and ext.lower() not in [
+                    ".jpg",
+                    ".jpeg",
+                    ".png",
+                    ".gif",
+                    ".svg",
+                    ".webp",
+                    ".bmp",
+                    ".ico",
+                ]:
+                    # Fix extension for images
+                    filename = f"{filename.split('.')[0]}.jpg"
+                elif resource_type == "videos" and ext.lower() not in [
+                    ".mp4",
+                    ".webm",
+                    ".avi",
+                    ".mov",
+                    ".wmv",
+                    ".flv",
+                    ".mkv",
+                ]:
+                    # Fix extension for videos
+                    filename = f"{filename.split('.')[0]}.mp4"
+                elif resource_type == "documents" and ext.lower() not in [
+                    ".pdf",
+                    ".doc",
+                    ".docx",
+                    ".xls",
+                    ".xlsx",
+                    ".txt",
+                ]:
+                    # Fix extension for documents
+                    filename = f"{filename.split('.')[0]}.pdf"
 
             # Sanitize filename
             filename = re.sub(r"[^\w\-.]", "_", filename)
@@ -171,19 +216,19 @@ class GrabHandler:
             # Download the file
             success = self.network_handler.download_file(url, str(file_path))
 
+            # Special handling for HTML-like content
+            if (
+                success
+                and resource_type == "html"
+                and file_path.suffix.lower() != ".html"
+            ):
+                # If we saved HTML content with a non-HTML extension, fix it
+                new_path = file_path.with_suffix(".html")
+                os.rename(file_path, new_path)
+                file_path = new_path
+
             # Verify the file was downloaded correctly
             if os.path.exists(file_path):
-                if os.path.getsize(file_path) < 100 and resource_type != "html":
-                    logger.warning(
-                        f"Downloaded file is suspiciously small: {file_path} ({os.path.getsize(file_path)} bytes)"
-                    )
-                    # If it's an image with less than 100 bytes, it's probably corrupted
-                    if resource_type == "images" and os.path.getsize(file_path) < 100:
-                        logger.error(f"Likely corrupted image file: {file_path}")
-                        os.remove(file_path)
-                        self.failed_urls.add(url)
-                        return False
-
                 # Validate file using BrowserAutomation helper
                 valid = BrowserAutomation.validate_downloaded_file(
                     file_path, resource_type, url
@@ -204,96 +249,71 @@ class GrabHandler:
             self.failed_urls.add(url)
             return False
 
-    def process_page(
-        self,
-        url: str,
-        use_selenium: bool,
-        use_camoufox: bool,
-        use_httpx: bool,
-        depth: int,
-        max_depth: int,
-    ) -> None:
-        """
-        Process a single webpage, extract content and resources.
+    def process_page(self, url: str) -> None:
+        """Process a web page and extract resources.
 
         Args:
             url: URL to process
-            use_selenium: Whether to use Selenium
-            use_camoufox: Whether to use Camoufox
-            use_httpx: Whether to use httpx
-            depth: Current depth
-            max_depth: Maximum depth
         """
-        if not self.output_path or not self.network_handler:
-            logger.error("Setup not completed before processing")
-            self.failed_urls.add(url)
+        if not self._should_process_url(url):
+            logger.info(f"Skipping URL: {url}")
             return
 
-        if url in self.already_visited or depth > max_depth:
-            return
-
-        logger.info(f"Processing page: {url} (depth {depth}/{max_depth})")
+        logger.info(f"Processing URL: {url}")
         self.already_visited.add(url)
 
         try:
-            # Get page content based on chosen method
-            if use_camoufox:
-                # Use camoufox for anti-bot protection
-                logger.info("Using camoufox for anti-bot protection")
-                with CamoufoxBrowser(
-                    headless=True,
-                    tor_proxy=self.network_handler
-                    and isinstance(self.network_handler, TorHandler),
-                ) as browser:
-                    html_content, resources = browser.get_page_content(url)
-                    self.failed_urls.update(browser.failed_urls)
-            elif use_selenium:
-                # Use selenium for JavaScript rendering
-                logger.info("Using selenium for JavaScript rendering")
-                with SeleniumBrowser(
-                    headless=True,
-                    tor_proxy=self.network_handler
-                    and isinstance(self.network_handler, TorHandler),
-                ) as browser:
-                    html_content, resources = browser.get_page_content(url)
-                    self.failed_urls.update(browser.failed_urls)
-            elif use_httpx:
-                # Use httpx for basic HTTP requests
-                logger.info("Using httpx for basic HTTP requests")
-                if not isinstance(self.network_handler, HttpxHandler):
-                    # Create a temporary httpx handler if needed
-                    with HttpxHandler() as httpx_handler:
-                        response = httpx_handler.get(url)
-                        html_content = response.text
-                        resources = BrowserAutomation.get_resources(url, html_content)
+            # Get page content and resources
+            html_content, resources = self.network_handler.get_page_content(
+                url, wait_for_js=self.args.javascript, scroll=self.args.scroll
+            )
+
+            # First determine if the URL itself is a resource
+            url_resource_type = self.network_handler.get_file_type(url)
+            if url_resource_type != "html" and url_resource_type != "skip":
+                logger.info(
+                    f"URL {url} is a {url_resource_type} resource, downloading directly"
+                )
+                self.download_file(url, url_resource_type)
+                return
+
+            # Only save HTML if content was retrieved successfully
+            if html_content:
+                # Validate HTML content before saving
+                if self._is_valid_html(html_content):
+                    self._save_html_content(url, html_content)
                 else:
-                    # Use the existing httpx handler
-                    response = self.network_handler.get(url)
-                    html_content = response.text
-                    resources = BrowserAutomation.get_resources(url, html_content)
+                    # If not valid HTML, it's likely a file, try to download directly
+                    logger.info(
+                        f"Content from {url} is not valid HTML, attempting direct download"
+                    )
+                    direct_type = self._detect_content_type(html_content)
+                    if direct_type != "html":
+                        self.download_file(url, direct_type)
+                    else:
+                        # Save it as HTML but log a warning
+                        logger.warning(
+                            f"Saving content with unclear type as HTML: {url}"
+                        )
+                        self._save_html_content(url, html_content)
             else:
-                # Use whatever network handler is available
-                response = self.network_handler.get(url)
-                html_content = response.text
-                resources = BrowserAutomation.get_resources(url, html_content)
+                logger.warning(f"No HTML content retrieved from: {url}")
 
-            # Save the HTML content
-            self._save_html_content(url, html_content)
+            # Process resources if requested
+            if self.args.resources:
+                self._process_resources(url, resources)
 
-            # Extract links for further crawling
-            if depth < max_depth:
+            # Process links if requested
+            if self.args.links:
                 links = BrowserAutomation.get_page_links(url, html_content)
-                for link in links:
-                    if link not in self.already_visited:
-                        self.to_visit.add(link)
-
-            # Download resources
-            for resource_type, urls in resources.items():
-                for resource_url in urls:
-                    self.download_file(resource_url, resource_type)
+                self._process_links(url, links)
 
         except Exception as e:
-            logger.error(f"Error processing {url}: {e}")
+            logger.error(f"Error processing URL {url}: {e}")
+            if self.args.debug:
+                import traceback
+
+                logger.debug(traceback.format_exc())
             self.failed_urls.add(url)
 
     def _save_html_content(self, url: str, html_content: str) -> None:
@@ -305,6 +325,23 @@ class GrabHandler:
             html_content: HTML content to save
         """
         if not self.output_path:
+            return
+
+        # First check if the URL actually points to a non-HTML resource
+        resource_type = BrowserAutomation.get_file_type(url)
+        if resource_type != "html":
+            logger.warning(
+                f"URL {url} appears to be a {resource_type} file, not HTML. Handling accordingly."
+            )
+            self.download_file(url, resource_type)
+            return
+
+        # Check if the content appears to be binary or not actually HTML
+        if not self._is_valid_html(html_content):
+            logger.warning(
+                f"Content from {url} doesn't appear to be valid HTML. Treating as document."
+            )
+            self.download_file(url, "documents")
             return
 
         page_dir = self.output_path / "html"
@@ -321,18 +358,46 @@ class GrabHandler:
             if not filename or "." not in filename:
                 filename = f"{filename or 'page'}.html"
 
-        # Check if the filename looks like an image file but is in the HTML path
+        # Check if the filename suggests this is a document or image, not HTML
         lower_filename = filename.lower()
+
+        # Check for document files
+        if any(
+            lower_filename.endswith(ext)
+            for ext in [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"]
+        ):
+            logger.warning(
+                f"Found document file '{filename}' in HTML path. Handling it as document."
+            )
+            self.download_file(url, "documents")
+            return
+
+        # Check for image files
         if any(
             lower_filename.endswith(ext)
             for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"]
         ):
-            # This is an image file wrongly categorized as HTML - fix by downloading it as an image
             logger.warning(
                 f"Found image file '{filename}' in HTML path. Handling it as image."
             )
             self.download_file(url, "images")
             return
+
+        # Check for video files
+        if any(
+            lower_filename.endswith(ext)
+            for ext in [".mp4", ".webm", ".avi", ".mov", ".wmv", ".flv"]
+        ):
+            logger.warning(
+                f"Found video file '{filename}' in HTML path. Handling it as video."
+            )
+            self.download_file(url, "videos")
+            return
+
+        # Ensure the filename has .html extension
+        if not lower_filename.endswith(".html") and not lower_filename.endswith(".htm"):
+            base_name = filename.split(".")[0] if "." in filename else filename
+            filename = f"{base_name}.html"
 
         # Sanitize filename
         filename = re.sub(r"[^\w\-.]", "_", filename)
@@ -349,6 +414,67 @@ class GrabHandler:
 
         self.resource_count["html"] += 1
         logger.info(f"Saved HTML: {url} -> {file_path}")
+
+    def _is_valid_html(self, content: str) -> bool:
+        """
+        Check if content appears to be valid HTML.
+
+        Args:
+            content: String content to check
+
+        Returns:
+            bool: True if content appears to be HTML, False otherwise
+        """
+        if not content:
+            return False
+
+        # Check for PDF signature
+        if content.startswith("%PDF-"):
+            return False
+
+        # Check for common HTML markers
+        lower_content = content.lower()
+        return (
+            "<!doctype html" in lower_content[:1000]
+            or "<html" in lower_content[:1000]
+            or "<head" in lower_content[:1000]
+            or "<body" in lower_content[:1000]
+        )
+
+    def _detect_content_type(self, content: str) -> str:
+        """
+        Attempt to detect content type from the content itself.
+
+        Args:
+            content: Content to analyze
+
+        Returns:
+            str: Detected file type ("documents", "images", "html", etc.)
+        """
+        # Check for PDF signature
+        if content.startswith("%PDF-"):
+            return "documents"
+
+        # Check for common image signatures
+        if content.startswith(b"\xff\xd8\xff"):  # JPEG
+            return "images"
+        if content.startswith(b"\x89PNG\r\n\x1a\n"):  # PNG
+            return "images"
+        if content.startswith(b"GIF87a") or content.startswith(b"GIF89a"):  # GIF
+            return "images"
+
+        # Check for HTML indicators
+        lower_content = content.lower()
+        if (
+            "<!doctype html" in lower_content[:1000]
+            or "<html" in lower_content[:1000]
+            or "<head" in lower_content[:1000]
+            or "<body" in lower_content[:1000]
+        ):
+            return "html"
+
+        # Default to documents for unknown types
+        return "documents"
 
     def crawl(
         self,
@@ -394,11 +520,6 @@ class GrabHandler:
                             executor.submit(
                                 self.process_page,
                                 page_url,
-                                use_selenium,
-                                use_camoufox,
-                                use_httpx and not use_selenium and not use_camoufox,
-                                len(self.already_visited) // 10,  # Approximate depth
-                                depth,
                             )
                         )
 

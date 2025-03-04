@@ -1,6 +1,6 @@
 [project]
 name = "web-grabber"
-version = "0.5.29"
+version = "0.5.33"
 description = "A powerful CLI tool for crawling websites and downloading content including HTML, images, and videos. Features multiple browsing modes including normal requests, Selenium for JavaScript rendering, and camoufox for anti-bot protection."
 authors = [
     { name = "Tadeas Fort", email = "business@tadeasfort.com" }

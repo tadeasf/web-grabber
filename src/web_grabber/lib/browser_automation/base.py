@@ -169,18 +169,11 @@ class BrowserAutomation(ABC):
         # Check for known file patterns first
         filename = os.path.basename(path)
 
-        # Skip files that are likely randomly generated or not real documents
-        if ext == "pdf":
-            # Skip PDFs with numeric filenames (likely random docs) unless they include keywords
-            if (
-                filename.replace(".pdf", "").isdigit()
-                and "resume" not in path.lower()
-                and "cv" not in path.lower()
-            ):
-                logger.debug(f"Skipping likely random PDF: {url}")
-                return "skip"
+        # Check if the URL appears to be a webpage (no extension or common web extensions)
+        if not ext or ext in ["html", "htm", "xhtml", "php", "asp", "aspx", "jsp"]:
+            return "html"
 
-        # Categorize by extension
+        # Categorize by extension for media and documents
         if ext in [
             "jpg",
             "jpeg",
@@ -217,16 +210,32 @@ class BrowserAutomation(ABC):
             "tar",
             "gz",
         ]:
-            return "documents"
-        elif ext in ["html", "htm", "xhtml", "php", "asp", "aspx", "jsp"]:
-            return "html"
-        else:
-            # Check for specific URL patterns that might indicate document resources
-            if "/resume" in lower_url or "/cv" in lower_url:
-                logger.info(f"Detected potential resume/CV document: {url}")
+            # Only include actual document URLs, not arbitrary URLs that we'd save as PDF
+            # Special handling for resume-like documents
+            if ext == "pdf" and (
+                "resume" in lower_url or "cv" in lower_url or "/documents/" in lower_url
+            ):
                 return "documents"
-            # Default to documents for unknown types
+            elif (
+                ext != "pdf"
+            ):  # Non-PDF documents are less likely to be misclassified webpages
+                return "documents"
+            else:
+                # For URLs that end in .pdf but don't seem to be actual documents
+                # Check if it's a random-looking filename that might be a hash
+                if filename.replace(".pdf", "").isdigit():
+                    logger.debug(
+                        f"URL ends with .pdf but appears to be a webpage: {url}"
+                    )
+                    return "html"  # Treat as HTML instead
+                return "documents"  # Otherwise assume it's a real PDF
+
+        # For URLs with no recognized extension, check for document-like patterns
+        if "/resume" in lower_url or "/cv" in lower_url or "/documents/" in lower_url:
             return "documents"
+
+        # Default for URLs without a recognized type - treat as HTML
+        return "html"
 
     @staticmethod
     def get_page_links(base_url: str, html_content: str) -> List[str]:
@@ -366,6 +375,8 @@ class BrowserAutomation(ABC):
                 logger.error(
                     f"Downloaded image is likely corrupted (size: {file_size} bytes): {file_path}"
                 )
+                # Remove the corrupted file
+                os.remove(file_path)
                 return False
 
             # For videos, we expect larger files
@@ -374,15 +385,39 @@ class BrowserAutomation(ABC):
                     f"Downloaded video is suspiciously small (size: {file_size} bytes): {file_path}"
                 )
 
-            # For documents, PDF files should be at least 1KB
-            if (
-                resource_type == "documents"
-                and file_path.suffix.lower() == ".pdf"
-                and file_size < 1024
-            ):
-                logger.warning(
-                    f"Downloaded PDF is suspiciously small (size: {file_size} bytes): {file_path}"
-                )
+            # Check if file appears to be HTML content saved with a wrong extension
+            if resource_type in ["documents", "images", "videos"] and file_size > 0:
+                # Read first 1KB to check if it looks like HTML
+                with open(file_path, "rb") as f:
+                    content_start = (
+                        f.read(1024).decode("utf-8", errors="ignore").lower()
+                    )
+
+                    if content_start.strip().startswith(("<!doctype html", "<html")):
+                        # This is HTML content saved with a wrong extension
+                        logger.error(
+                            f"File {file_path} appears to be HTML content with wrong extension. Deleting."
+                        )
+                        os.remove(file_path)
+                        return False
+
+            # For PDF documents, check if it's a valid PDF
+            if resource_type == "documents" and file_path.suffix.lower() == ".pdf":
+                # Check if it has a PDF signature
+                with open(file_path, "rb") as f:
+                    header = f.read(5).decode("utf-8", errors="ignore")
+                    if not header.startswith("%PDF-"):
+                        logger.error(
+                            f"File {file_path} has .pdf extension but is not a valid PDF. Deleting."
+                        )
+                        os.remove(file_path)
+                        return False
+
+                # Still warn about small PDFs
+                if file_size < 1024:
+                    logger.warning(
+                        f"Downloaded PDF is suspiciously small (size: {file_size} bytes): {file_path}"
+                    )
 
             return True
         except Exception as e:
