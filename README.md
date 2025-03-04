@@ -5,6 +5,8 @@ A powerful CLI tool for crawling websites and downloading content including HTML
 ## Features
 
 - **Complete Website Crawling**: Download all HTML pages, images, and videos from a website
+- **Interactive Mode**: Choose where to save content with path completion
+- **Automatic Directory Naming**: Automatically creates directories named after the website domain
 - **Anti-Bot Protection**: Use camoufox to avoid detection by anti-bot mechanisms
 - **Tor Integration**: Route traffic through Tor network for anonymity
 - **Selenium Support**: Render JavaScript for dynamic websites
@@ -46,19 +48,28 @@ Once installed, you can use the `web-grabber` command directly from your termina
 Download an entire website including all HTML, images, and videos:
 
 ```bash
-web-grabber grab https://example.com --output-dir ./example_site --depth 2
+web-grabber grab https://example.com
+```
+
+Web Grabber will interactively prompt you where to save the content, with the domain name as the default directory.
+
+For non-interactive usage with explicit output directory:
+
+```bash
+web-grabber grab https://example.com --output-dir ./example_site --non-interactive
 ```
 
 Alternatively, you can run the module directly:
 
 ```bash
-python -m web_grabber grab https://example.com --output-dir ./example_site --depth 2
+python -m web_grabber grab https://example.com
 ```
 
 ### Options for `grab` Command
 
 - `url`: URL of the website to crawl
-- `--output-dir PATH`: Directory to save downloaded content (default: ./grabbed_site)
+- `--output-dir PATH`: Directory to save downloaded content (defaults to domain name if not specified)
+- `--non-interactive`: Run in non-interactive mode (no prompts)
 - `--depth INT`: Maximum crawl depth (default: 100, effectively unlimited for most sites)
 - `--tor`: Route traffic through Tor network
 - `--selenium`: Use Selenium for JavaScript rendered content
@@ -108,10 +119,23 @@ web-grabber grab https://example.com --tor
 
 ## Examples
 
+### Interactive mode with automatic domain-based directory
+
+```bash
+web-grabber grab https://example.com
+# Will interactively prompt with default directory "example.com"
+```
+
 ### Download a website with JavaScript rendering
 
 ```bash
 web-grabber grab https://example.com --selenium --depth 3
+```
+
+### Non-interactive mode with explicit output directory
+
+```bash
+web-grabber grab https://example.com --output-dir ./custom_folder --non-interactive
 ```
 
 ### Scrape product information with anti-bot protection
@@ -130,6 +154,7 @@ web-grabber grab https://example.com --tor --delay 1.0
 
 - Python 3.8+
 - Required dependencies (automatically installed):
+  - prompt-toolkit (for interactive CLI features)
   - camoufox[geoip] (for anti-bot protection)
   - typer (for CLI interface)
   - selenium (for JavaScript rendering)
