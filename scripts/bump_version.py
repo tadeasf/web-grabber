@@ -30,8 +30,8 @@ def bump_version_in_pyproject():
         return False
     
     major, minor, patch = map(int, match.groups())
-    new_minor = minor + 1
-    new_version = f'{major}.{new_minor}.{patch}'
+    new_patch = patch + 1
+    new_version = f'{major}.{minor}.{new_patch}'
     
     # Replace version
     new_content = version_pattern.sub(f'version = "{new_version}"', content)
