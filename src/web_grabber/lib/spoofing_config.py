@@ -38,4 +38,4 @@ DEFAULT_CONFIG = {
     "geoip": True,
     "os": ["windows", "macos"],
     "locale": ["en-US", "en-GB"],  # Common English locales
-} 
+}

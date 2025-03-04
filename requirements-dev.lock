@@ -105,6 +105,7 @@ requests==2.32.3
 rich==13.9.4
     # via typer
     # via web-grabber
+ruff==0.9.9
 screeninfo==0.8.1
     # via camoufox
 selenium==4.29.0

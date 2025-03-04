@@ -1,10 +1,10 @@
 """Handler for routing traffic through Tor network."""
 
 import logging
-import requests
 import socket
-import socks
 
+import requests
+import socks
 
 logger = logging.getLogger(__name__)
 
@@ -12,22 +12,22 @@ logger = logging.getLogger(__name__)
 def configure_tor(session=None):
     """
     Configure a requests session to route traffic through Tor.
-    
+
     Args:
         session: A requests.Session object or None to create a new one
-        
+
     Returns:
         requests.Session: Configured session object
     """
     logger.info("Configuring Tor proxy at 127.0.0.1:9050")
-    
+
     if session is None:
         session = requests.Session()
-    
+
     # Configure socket to use SOCKS proxy
     socks.set_default_proxy(socks.SOCKS5, "127.0.0.1", 9050)
     socket.socket = socks.socksocket
-    
+
     # Test the connection
     try:
         test_response = requests.get("https://check.torproject.org")
@@ -39,7 +39,7 @@ def configure_tor(session=None):
         logger.error(f"Failed to connect to Tor network: {e}")
         logger.error("Make sure Tor service is running on 127.0.0.1:9050")
         raise
-    
+
     return session
 
 

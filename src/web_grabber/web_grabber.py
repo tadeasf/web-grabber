@@ -2,12 +2,12 @@
 
 import logging
 import sys
+
 import typer
 
 from web_grabber import __version__
 from web_grabber.cmd.grab import grab_command
 from web_grabber.cmd.scrape import scrape_command
-
 
 # Create main Typer app
 app = typer.Typer(
@@ -30,12 +30,16 @@ app.command(name="scrape")(scrape_command)
 
 @app.callback()
 def main(
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output except errors"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Enable verbose output"
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q", help="Suppress all output except errors"
+    ),
 ):
     """
     Web Grabber: Download entire websites including HTML, images, and videos.
-    
+
     Use the 'grab' command to start crawling a website.
     Use the 'scrape' command to extract specific elements using CSS selectors.
     """
