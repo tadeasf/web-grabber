@@ -17,7 +17,7 @@ A powerful CLI tool for crawling websites and downloading content including HTML
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/web-grabber.git
+git clone https://github.com/tadeasf/web-grabber.git
 cd web-grabber
 
 # Install with Rye
@@ -30,7 +30,7 @@ pip install dist/*.whl
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/web-grabber.git
+git clone https://github.com/tadeasf/web-grabber.git
 cd web-grabber
 
 # Install dependencies and package

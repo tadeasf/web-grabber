@@ -41,3 +41,5 @@ debug.log
 # OS specific
 .DS_Store
 Thumbs.db
+src/camoufox-bin
+src/camoufox
