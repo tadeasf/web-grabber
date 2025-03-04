@@ -104,9 +104,9 @@ class GrabHandler:
                 logger.warning(
                     "Tor support not available, falling back to standard requests"
                 )
-                from web_grabber.lib.network.standard_handler import StandardHandler
+                from web_grabber.lib.network.base import NetworkHandler
 
-                self.network_handler = StandardHandler(
+                self.network_handler = NetworkHandler(
                     user_agent=user_agent, timeout=timeout
                 )
         elif httpx:
@@ -119,16 +119,16 @@ class GrabHandler:
                 )
             except ImportError:
                 logger.warning("httpx not available, falling back to standard requests")
-                from web_grabber.lib.network.standard_handler import StandardHandler
+                from web_grabber.lib.network.base import NetworkHandler
 
-                self.network_handler = StandardHandler(
+                self.network_handler = NetworkHandler(
                     user_agent=user_agent, timeout=timeout
                 )
         else:
-            from web_grabber.lib.network.standard_handler import StandardHandler
+            from web_grabber.lib.network.base import NetworkHandler
 
             logger.info("Using standard requests for network requests")
-            self.network_handler = StandardHandler(
+            self.network_handler = NetworkHandler(
                 user_agent=user_agent, timeout=timeout
             )
 
@@ -146,12 +146,12 @@ class GrabHandler:
             except (ImportError, RuntimeError) as e:
                 logger.warning(f"Could not initialize Camoufox browser: {e}")
                 try:
-                    from web_grabber.lib.browser_automation.standard_handler.standard_handler import (
-                        StandardBrowser,
+                    from web_grabber.lib.browser_automation.base import (
+                        BrowserAutomation,
                     )
 
                     logger.info("Falling back to standard browser")
-                    self.browser_handler = StandardBrowser()
+                    self.browser_handler = BrowserAutomation()
                 except Exception as e2:
                     logger.error(f"Could not initialize standard browser either: {e2}")
                     self.browser_handler = None
@@ -167,12 +167,12 @@ class GrabHandler:
             except Exception as e:
                 logger.warning(f"Could not initialize Selenium browser: {e}")
                 try:
-                    from web_grabber.lib.browser_automation.standard_handler.standard_handler import (
-                        StandardBrowser,
+                    from web_grabber.lib.browser_automation.base import (
+                        BrowserAutomation,
                     )
 
                     logger.info("Falling back to standard browser")
-                    self.browser_handler = StandardBrowser()
+                    self.browser_handler = BrowserAutomation()
                 except Exception as e2:
                     logger.error(f"Could not initialize standard browser either: {e2}")
                     self.browser_handler = None

@@ -2,8 +2,7 @@
 
 import logging
 import time
-from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
@@ -13,8 +12,8 @@ from urllib3.util.retry import Retry
 logger = logging.getLogger(__name__)
 
 
-class NetworkHandler(ABC):
-    """Base class for network request handling."""
+class NetworkHandler:
+    """Base class for network request handling with standard implementation."""
 
     def __init__(
         self,
@@ -41,6 +40,9 @@ class NetworkHandler(ABC):
         self.delay_between_requests = delay_between_requests
         self.session = self._create_session()
         self.last_request_time = 0.0
+        
+        # Configure proxies if needed
+        self.configure_proxies()
 
     def _create_session(self) -> requests.Session:
         """Create and configure a requests session."""
@@ -96,12 +98,17 @@ class NetworkHandler(ABC):
         # Apply rate limiting
         self._respect_rate_limits()
 
+        # Apply custom headers if provided
+        final_headers = self.session.headers.copy()
+        if headers:
+            final_headers.update(headers)
+
         # Make request and update last request time
         self.last_request_time = time.time()
         return self.session.get(
             url,
             params=params,
-            headers=headers,
+            headers=final_headers,
             timeout=self.timeout,
             stream=stream,
         )
@@ -113,9 +120,10 @@ class NetworkHandler(ABC):
             if elapsed < self.delay_between_requests:
                 time.sleep(self.delay_between_requests - elapsed)
 
-    @abstractmethod
     def configure_proxies(self) -> None:
-        """Configure proxies for the session. Must be implemented by subclasses."""
+        """Configure proxies for the session. Default implementation uses no proxies."""
+        # By default, no proxies are used
+        # This is implemented in subclasses like TorHandler
         pass
 
     def close(self) -> None:
@@ -173,3 +181,53 @@ class NetworkHandler(ABC):
         except Exception as e:
             logger.error(f"Error downloading {url}: {e}")
             return False
+
+    def get_file_type(self, url: str) -> str:
+        """
+        Determine the file type from a URL.
+
+        Args:
+            url: URL to analyze
+
+        Returns:
+            str: File type category ('html', 'images', 'documents', 'videos', or 'skip')
+        """
+        from web_grabber.lib.browser_automation.base import BrowserAutomation
+
+        return BrowserAutomation.get_file_type(url)
+
+    def get_page_content(
+        self, url: str, wait_for_js: bool = False, scroll: bool = False
+    ) -> Tuple[str, Dict[str, List[str]]]:
+        """
+        Get the page content and related resources from a URL.
+
+        Args:
+            url: URL to request
+            wait_for_js: Whether to wait for JavaScript to load
+            scroll: Whether to scroll the page
+
+        Returns:
+            Tuple[str, Dict[str, List[str]]]: The page content and related resources
+        """
+        try:
+            # Make the request
+            response = self.get(url)
+
+            # Check if successful
+            if response.status_code != 200:
+                logger.warning(f"Got status code {response.status_code} for {url}")
+                return "", {}
+
+            # Get content
+            html_content = response.text
+
+            # Extract resources
+            from web_grabber.lib.browser_automation.base import BrowserAutomation
+
+            resources = BrowserAutomation.get_resources(url, html_content)
+
+            return html_content, resources
+        except Exception as e:
+            logger.error(f"Error getting page content for {url}: {e}")
+            return "", {}

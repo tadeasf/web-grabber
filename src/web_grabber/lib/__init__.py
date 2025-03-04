@@ -18,7 +18,6 @@ from web_grabber.lib.browser_automation.selenium_handler.selenium_handler import
 from web_grabber.lib.network import (
     HttpxHandler,
     NetworkHandler,
-    StandardHandler,
     TorHandler,
 )
 from web_grabber.lib.network.tor_handler.tor_handler import (
@@ -35,7 +34,6 @@ __all__ = [
     "NetworkHandler",
     "TorHandler",
     "HttpxHandler",
-    "StandardHandler",
     # Legacy functions for backward compatibility
     "get_selenium_session",
     "get_page_content",
