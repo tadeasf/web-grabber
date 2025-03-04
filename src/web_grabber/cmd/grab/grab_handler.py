@@ -13,10 +13,7 @@ from web_grabber.lib.browser_automation import (
     BrowserAutomation,
 )
 from web_grabber.lib.network import (
-    HttpxHandler,
     NetworkHandler,
-    StandardHandler,
-    TorHandler,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,56 +37,149 @@ class GrabHandler:
         self.max_depth = 100
         self.restrict_domain = True
         self.debug = False
+        self.browser_handler = None
 
     def setup(
         self,
         url: str,
         output_dir: str,
         tor: bool = False,
-        httpx: bool = True,
+        httpx: bool = False,
         selenium: bool = False,
         camoufox: bool = False,
-        user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36",
+        user_agent: str = None,
         timeout: int = 30,
-        delay: float = 0.5,
+        delay: float = 0.0,
         retry_failed: bool = False,
-        javascript: bool = True,
-        scroll: bool = True,
+        javascript: bool = False,
+        scroll: bool = False,
         resources: bool = True,
         links: bool = True,
-        max_depth: int = 100,
+        max_depth: int = 1,
         restrict_domain: bool = True,
         debug: bool = False,
     ) -> None:
-        """
-        Set up the grab handler.
+        """Set up the grab handler.
 
         Args:
-            url: Starting URL to crawl
-            output_dir: Directory to save output
+            url: URL to crawl
+            output_dir: Output directory
             tor: Whether to use Tor
             httpx: Whether to use httpx
             selenium: Whether to use Selenium
             camoufox: Whether to use Camoufox
-            user_agent: User agent string
-            timeout: Request timeout in seconds
-            delay: Delay between requests in seconds
-            retry_failed: Whether to retry previously failed URLs
-            javascript: Whether to wait for JavaScript to execute
+            user_agent: User agent to use
+            timeout: Timeout for requests
+            delay: Delay between requests
+            retry_failed: Whether to retry failed URLs
+            javascript: Whether to execute JavaScript
             scroll: Whether to scroll the page
             resources: Whether to download resources
             links: Whether to follow links
-            max_depth: Maximum crawl depth
-            restrict_domain: Whether to restrict crawling to the same domain
+            max_depth: Maximum depth to crawl
+            restrict_domain: Whether to restrict to the same domain
             debug: Whether to enable debug logging
         """
         # Reset state
         self.already_visited = set()
         self.to_visit = set([url])
         self.failed_urls = set()
-        self.resource_count = {"html": 0, "images": 0, "documents": 0, "videos": 0}
+        self.resource_count = {
+            "html": 0,
+            "images": 0,
+            "documents": 0,
+            "videos": 0,
+        }
 
-        # Set crawling options
+        # Set up network handler
+        if tor:
+            try:
+                from web_grabber.lib.network.tor_handler import TorHandler
+
+                logger.info("Using Tor for network requests")
+                self.network_handler = TorHandler(
+                    user_agent=user_agent, timeout=timeout
+                )
+            except ImportError:
+                logger.warning(
+                    "Tor support not available, falling back to standard requests"
+                )
+                from web_grabber.lib.network.standard_handler import StandardHandler
+
+                self.network_handler = StandardHandler(
+                    user_agent=user_agent, timeout=timeout
+                )
+        elif httpx:
+            try:
+                from web_grabber.lib.network.httpx_handler import HttpxHandler
+
+                logger.info("Using httpx for network requests")
+                self.network_handler = HttpxHandler(
+                    user_agent=user_agent, timeout=timeout
+                )
+            except ImportError:
+                logger.warning("httpx not available, falling back to standard requests")
+                from web_grabber.lib.network.standard_handler import StandardHandler
+
+                self.network_handler = StandardHandler(
+                    user_agent=user_agent, timeout=timeout
+                )
+        else:
+            from web_grabber.lib.network.standard_handler import StandardHandler
+
+            logger.info("Using standard requests for network requests")
+            self.network_handler = StandardHandler(
+                user_agent=user_agent, timeout=timeout
+            )
+
+        # Set up browser automation for JavaScript content
+        self.browser_handler = None
+        if camoufox:
+            try:
+                from web_grabber.lib.browser_automation.camoufox_handler.camoufox_handler import (
+                    CamoufoxBrowser,
+                )
+
+                logger.info("Setting up Camoufox browser for JavaScript content")
+                self.browser_handler = CamoufoxBrowser(headless=True, tor_proxy=tor)
+                logger.info("Using Camoufox browser for JavaScript content")
+            except (ImportError, RuntimeError) as e:
+                logger.warning(f"Could not initialize Camoufox browser: {e}")
+                try:
+                    from web_grabber.lib.browser_automation.standard_handler.standard_handler import (
+                        StandardBrowser,
+                    )
+
+                    logger.info("Falling back to standard browser")
+                    self.browser_handler = StandardBrowser()
+                except Exception as e2:
+                    logger.error(f"Could not initialize standard browser either: {e2}")
+                    self.browser_handler = None
+        elif selenium:
+            try:
+                from web_grabber.lib.browser_automation.selenium_handler.selenium_handler import (
+                    SeleniumBrowser,
+                )
+
+                logger.info("Setting up Selenium browser for JavaScript content")
+                self.browser_handler = SeleniumBrowser(headless=True, tor_proxy=tor)
+                logger.info("Using Selenium browser for JavaScript content")
+            except Exception as e:
+                logger.warning(f"Could not initialize Selenium browser: {e}")
+                try:
+                    from web_grabber.lib.browser_automation.standard_handler.standard_handler import (
+                        StandardBrowser,
+                    )
+
+                    logger.info("Falling back to standard browser")
+                    self.browser_handler = StandardBrowser()
+                except Exception as e2:
+                    logger.error(f"Could not initialize standard browser either: {e2}")
+                    self.browser_handler = None
+
+        # Set options
+        self.url = url
+        self.output_path = Path(output_dir)
         self.javascript = javascript
         self.scroll = scroll
         self.resources = resources
@@ -97,29 +187,12 @@ class GrabHandler:
         self.max_depth = max_depth
         self.restrict_domain = restrict_domain
         self.debug = debug
+        self.delay = delay
 
-        # Set up output directory
-        self.output_path = Path(output_dir)
-        self.output_path.mkdir(parents=True, exist_ok=True)
+        # Create output directories
+        self._create_output_dirs()
 
-        # Set up network handler
-        if tor:
-            self.network_handler = TorHandler(
-                user_agent=user_agent, timeout=timeout, delay_between_requests=delay
-            )
-            logger.info("Using Tor for network requests")
-        elif httpx and not selenium and not camoufox:
-            self.network_handler = HttpxHandler(
-                user_agent=user_agent, timeout=timeout, delay_between_requests=delay
-            )
-            logger.info("Using httpx for network requests")
-        else:
-            self.network_handler = StandardHandler(
-                user_agent=user_agent, timeout=timeout, delay_between_requests=delay
-            )
-            logger.info("Using standard requests for network requests")
-
-        # Load previously failed URLs if requested
+        # Load failed URLs if retry_failed is True
         if retry_failed:
             self._load_failed_urls()
 
@@ -329,10 +402,17 @@ class GrabHandler:
         self.already_visited.add(url)
 
         try:
-            # Get page content and resources
-            html_content, resources = self.network_handler.get_page_content(
-                url, wait_for_js=self.javascript, scroll=self.scroll
-            )
+            # Get page content and resources using browser handler if available, otherwise use network handler
+            if self.browser_handler and (self.javascript or self.scroll):
+                html_content, resources = self.browser_handler.get_page_content(
+                    url, wait_for_js=self.javascript, scroll=self.scroll
+                )
+                logger.debug("Retrieved content using browser automation")
+            else:
+                html_content, resources = self.network_handler.get_page_content(
+                    url, wait_for_js=self.javascript, scroll=self.scroll
+                )
+                logger.debug("Retrieved content using network handler")
 
             # First determine if the URL itself is a resource
             url_resource_type = self.network_handler.get_file_type(url)
@@ -691,3 +771,17 @@ class GrabHandler:
             if self._should_process_url(link):
                 # Add to queue for processing
                 self.to_visit.add(link)
+
+    def _create_output_dirs(self) -> None:
+        """Create the output directories for different resource types."""
+        self.output_path.mkdir(parents=True, exist_ok=True)
+
+        # Create html directory for HTML files
+        (self.output_path / "html").mkdir(exist_ok=True)
+
+        # Create files directory with subdirectories for resources
+        files_dir = self.output_path / "files"
+        files_dir.mkdir(exist_ok=True)
+        (files_dir / "images").mkdir(exist_ok=True)
+        (files_dir / "documents").mkdir(exist_ok=True)
+        (files_dir / "videos").mkdir(exist_ok=True)

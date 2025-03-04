@@ -240,29 +240,33 @@ def get_selenium_session(headless=True, tor_proxy=False):
         tor_proxy (bool): Whether to route traffic through Tor
 
     Returns:
-        webdriver: Configured WebDriver instance
+        SeleniumBrowser: Configured browser instance
     """
-    browser = SeleniumBrowser(headless=headless, tor_proxy=tor_proxy)
-    return browser.driver
+    return SeleniumBrowser(headless=headless, tor_proxy=tor_proxy)
 
 
 def get_page_content(driver, url, wait_for_js=True, scroll=True):
     """
-    Get the content of a page using Selenium.
+    Get page content using Selenium.
+
+    This function maintains compatibility with legacy code.
 
     Args:
-        driver: Selenium WebDriver instance
-        url (str): URL to fetch
-        wait_for_js (bool): Whether to wait for JavaScript to execute
-        scroll (bool): Whether to scroll page to load lazy content
+        driver: Selenium WebDriver or SeleniumBrowser instance
+        url: URL to retrieve
+        wait_for_js: Whether to wait for JavaScript
+        scroll: Whether to scroll the page
 
     Returns:
-        tuple: (HTML content, resources dict)
+        Tuple[str, Dict[str, List[str]]]: HTML content and resources
     """
-    # Create a temporary browser instance with the given driver
-    browser = SeleniumBrowser()
-    browser.driver = driver
-    return browser.get_page_content(url, wait_for_js, scroll)
+    if isinstance(driver, SeleniumBrowser):
+        return driver.get_page_content(url, wait_for_js, scroll)
+    else:
+        # Assume it's a legacy WebDriver instance
+        browser = SeleniumBrowser(headless=True)
+        browser.driver = driver  # Use the existing driver
+        return browser.get_page_content(url, wait_for_js, scroll)
 
 
 def close_selenium_session(driver):
