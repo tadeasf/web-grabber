@@ -1,6 +1,6 @@
 """Selenium browser automation for web-grabber."""
 
-from src.web_grabber.lib.browser_automation.selenium_handler.selenium_handler import (
+from web_grabber.lib.browser_automation.selenium_handler.selenium_handler import (
     SeleniumBrowser,
     close_selenium_session,
     get_page_content,

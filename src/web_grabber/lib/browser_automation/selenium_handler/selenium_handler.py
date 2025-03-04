@@ -10,7 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
-from src.web_grabber.lib.browser_automation.base import BrowserAutomation
+from web_grabber.lib.browser_automation.base import BrowserAutomation
 
 logger = logging.getLogger(__name__)
 

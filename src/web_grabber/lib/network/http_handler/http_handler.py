@@ -12,7 +12,7 @@ except ImportError:
         "httpx is required for HttpxHandler. Install it with 'pip install httpx'."
     )
 
-from src.web_grabber.lib.network.base import NetworkHandler
+from web_grabber.lib.network.base import NetworkHandler
 
 logger = logging.getLogger(__name__)
 

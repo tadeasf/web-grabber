@@ -13,8 +13,8 @@ except ImportError:
     CAMOUFOX_AVAILABLE = False
     AsyncCamoufox = Any  # Type alias for missing package
 
-from src.web_grabber.lib.browser_automation.base import BrowserAutomation
-from src.web_grabber.lib.browser_automation.camoufox_handler.spoofing_config import (
+from web_grabber.lib.browser_automation.base import BrowserAutomation
+from web_grabber.lib.browser_automation.camoufox_handler.spoofing_config import (
     COMMON_FONTS,
     COMMON_PLUGINS,
     PLATFORMS,

@@ -1,6 +1,6 @@
-"""Tor network handling for web-grabber."""
+"""Tor handler module for network requests."""
 
-from src.web_grabber.lib.network.tor_handler.tor_handler import (
+from web_grabber.lib.network.tor_handler.tor_handler import (
     TorHandler,
     configure_tor,
     reset_tor_connection,

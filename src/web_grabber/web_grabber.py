@@ -5,8 +5,8 @@ import sys
 
 import typer
 
-from src.web_grabber import __version__
-from src.web_grabber.cmd.grab import grab_command
+from web_grabber import __version__
+from web_grabber.cmd.grab import grab_command
 
 # Create main Typer app
 app = typer.Typer(

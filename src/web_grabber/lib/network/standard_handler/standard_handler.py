@@ -5,7 +5,7 @@ from typing import Dict, Optional
 
 import requests
 
-from src.web_grabber.lib.network.base import NetworkHandler
+from web_grabber.lib.network.base import NetworkHandler
 
 logger = logging.getLogger(__name__)
 

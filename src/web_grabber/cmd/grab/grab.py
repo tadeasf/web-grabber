@@ -5,7 +5,7 @@ import sys
 
 import typer
 
-from src.web_grabber.cmd.grab.grab_handler import GrabHandler
+from web_grabber.cmd.grab.grab_handler import GrabHandler
 
 logger = logging.getLogger(__name__)
 

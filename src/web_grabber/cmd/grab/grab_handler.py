@@ -9,12 +9,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
-from src.web_grabber.lib.browser_automation import (
+from web_grabber.lib.browser_automation import (
     BrowserAutomation,
     CamoufoxBrowser,
     SeleniumBrowser,
 )
-from src.web_grabber.lib.network import (
+from web_grabber.lib.network import (
     HttpxHandler,
     NetworkHandler,
     StandardHandler,
