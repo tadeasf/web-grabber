@@ -1,6 +1,6 @@
 [project]
 name = "web-grabber"
-version = "0.5.3"
+version = "0.5.4"
 description = "Add your description here"
 authors = [
     { name = "Tadeas Fort", email = "business@tadeasfort.com" }

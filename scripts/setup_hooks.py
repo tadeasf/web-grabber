@@ -3,7 +3,6 @@
 Script to set up pre-commit hooks for the project.
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path
