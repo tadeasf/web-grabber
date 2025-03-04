@@ -3,17 +3,18 @@ repos:
     hooks:
       - id: version-bump
         name: Bump Version
-        entry: python scripts/bump_version.py
         language: system
-        always_run: true
+        entry: python scripts/bump_version.py
         pass_filenames: false
+        always_run: true
         stages: [pre-commit]
 
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.9.9
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.7
     hooks:
       - id: ruff
         name: ruff (lint)
-        args: [--fix, --exit-non-zero-on-fix]
+        args: [--fix, --exit-non-zero-on-fix, --no-cache]
       - id: ruff-format
         name: ruff (format)
+        args: [--no-cache]
