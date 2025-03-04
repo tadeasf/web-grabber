@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.rye/
+
+# Pre-commit
+.pre-commit-config.yaml.cache
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Tor logs
+debug.log
+
+# OS specific
+.DS_Store
+Thumbs.db
