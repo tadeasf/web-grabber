@@ -251,7 +251,7 @@ def process_page(url: str, output_dir: Path, use_selenium: bool, use_camoufox: b
 def grab_command(
     url: str = typer.Argument(..., help="URL of the website to crawl"),
     output_dir: str = typer.Option("./grabbed_site", help="Directory to save downloaded content"),
-    depth: int = typer.Option(2, help="Maximum crawl depth"),
+    depth: int = typer.Option(100, help="Maximum crawl depth (default: 100, effectively unlimited for most sites)"),
     tor: bool = typer.Option(False, help="Route traffic through Tor network"),
     selenium: bool = typer.Option(False, help="Use Selenium for JavaScript rendered content"),
     camoufox: bool = typer.Option(False, help="Use camoufox for anti-bot protection (overrides --selenium)"),

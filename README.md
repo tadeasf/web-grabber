@@ -59,7 +59,7 @@ python -m web_grabber grab https://example.com --output-dir ./example_site --dep
 
 - `url`: URL of the website to crawl
 - `--output-dir PATH`: Directory to save downloaded content (default: ./grabbed_site)
-- `--depth INT`: Maximum crawl depth (default: 2)
+- `--depth INT`: Maximum crawl depth (default: 100, effectively unlimited for most sites)
 - `--tor`: Route traffic through Tor network
 - `--selenium`: Use Selenium for JavaScript rendered content
 - `--camoufox`: Use camoufox for anti-bot protection (overrides --selenium)

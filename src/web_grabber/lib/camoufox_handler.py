@@ -74,7 +74,7 @@ async def get_page_content_with_camoufox(browser: AsyncCamoufox, url: str, wait_
     
     try:
         # Create a new page
-        page = await browser.new_page()
+        page = await browser.page()
         
         # Navigate to the URL
         await page.goto(url)
@@ -150,7 +150,7 @@ async def take_screenshot_with_camoufox(browser: AsyncCamoufox, url: str, output
         output_path (str): Path to save the screenshot
     """
     try:
-        page = await browser.new_page()
+        page = await browser.page()
         await page.goto(url)
         await page.wait_for_load_state("networkidle")
         
