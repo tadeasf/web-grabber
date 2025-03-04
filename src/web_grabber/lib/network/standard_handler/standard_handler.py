@@ -1,7 +1,7 @@
 """Standard network handler implementation using requests."""
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import requests
 
@@ -59,16 +59,80 @@ class StandardHandler(NetworkHandler):
         stream: bool = False,
     ) -> requests.Response:
         """
-        Make a GET request using requests.
+        Make a GET request to the specified URL.
 
         Args:
             url: URL to request
-            params: Query parameters
-            headers: Additional headers
+            params: Optional query parameters
+            headers: Optional headers
             stream: Whether to stream the response
 
         Returns:
-            requests.Response object
+            requests.Response: The response object
         """
-        # Use the base NetworkHandler get method
-        return super().get(url, params, headers, stream)
+        # Respect rate limits
+        self._respect_rate_limits()
+
+        # Apply custom headers if provided
+        final_headers = self.session.headers.copy()
+        if headers:
+            final_headers.update(headers)
+
+        # Make the request with retries
+        return self.session.get(
+            url,
+            params=params,
+            headers=final_headers,
+            timeout=self.timeout,
+            stream=stream,
+        )
+
+    def get_file_type(self, url: str) -> str:
+        """
+        Determine the file type from a URL.
+
+        Args:
+            url: URL to analyze
+
+        Returns:
+            str: File type category ('html', 'images', 'documents', 'videos', or 'skip')
+        """
+        from web_grabber.lib.browser_automation.base import BrowserAutomation
+
+        return BrowserAutomation.get_file_type(url)
+
+    def get_page_content(
+        self, url: str, wait_for_js: bool = False, scroll: bool = False
+    ) -> Tuple[str, Dict[str, List[str]]]:
+        """
+        Get the page content and related resources from a URL.
+
+        Args:
+            url: URL to request
+            wait_for_js: Whether to wait for JavaScript to load
+            scroll: Whether to scroll the page
+
+        Returns:
+            Tuple[str, Dict[str, List[str]]]: The page content and related resources
+        """
+        try:
+            # Make the request
+            response = self.get(url)
+
+            # Check if successful
+            if response.status_code != 200:
+                logger.warning(f"Got status code {response.status_code} for {url}")
+                return "", {}
+
+            # Get content
+            html_content = response.text
+
+            # Extract resources
+            from web_grabber.lib.browser_automation.base import BrowserAutomation
+
+            resources = BrowserAutomation.get_resources(url, html_content)
+
+            return html_content, resources
+        except Exception as e:
+            logger.error(f"Error getting page content for {url}: {e}")
+            return "", {}

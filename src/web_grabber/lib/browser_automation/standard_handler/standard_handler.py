@@ -1,12 +1,17 @@
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 import requests
+from web_grabber.lib.browser_automation.base import BrowserAutomation
 
 logger = logging.getLogger(__name__)
 
 
 class StandardBrowser:
+    def __init__(self):
+        """Initialize the StandardBrowser instance."""
+        self._failed_urls = set()
+
     def get_page_content(
         self, url: str, *args, **kwargs
     ) -> Tuple[str, Dict[str, List[str]]]:
@@ -24,7 +29,7 @@ class StandardBrowser:
 
         try:
             # First check if the URL points to a non-HTML resource
-            resource_type = self.get_file_type(url)
+            resource_type = BrowserAutomation.get_file_type(url)
             if resource_type != "html" and resource_type != "skip":
                 logger.info(f"URL {url} appears to be a {resource_type} file, not HTML")
                 self.add_failed_url(url)
@@ -73,7 +78,7 @@ class StandardBrowser:
                 return html_content, resources
 
             # Extract resources from content
-            resources = self.get_resources(url, html_content)
+            resources = BrowserAutomation.get_resources(url, html_content)
 
             return html_content, resources
         except requests.exceptions.RequestException as e:
@@ -110,3 +115,12 @@ class StandardBrowser:
             or "<head" in lower_content[:1000]
             or "<body" in lower_content[:1000]
         )
+
+    @property
+    def failed_urls(self) -> Set[str]:
+        """Get the set of failed URLs."""
+        return self._failed_urls
+
+    def add_failed_url(self, url: str) -> None:
+        """Add a URL to the set of failed URLs."""
+        self._failed_urls.add(url)

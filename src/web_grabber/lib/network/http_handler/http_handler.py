@@ -1,9 +1,8 @@
 """HTTP handler implementation using httpx."""
 
 import logging
-import os
 import time
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 try:
     import httpx
@@ -154,45 +153,74 @@ class HttpxHandler(NetworkHandler):
 
     def download_file(self, url: str, file_path: str, chunk_size: int = 8192) -> bool:
         """
-        Download a file from a URL to the specified path.
+        Download a file from the specified URL.
 
         Args:
-            url: URL to download from
-            file_path: Path to save the file to
-            chunk_size: Size of chunks to use when downloading
+            url: URL of the file to download
+            file_path: Path where to save the file
+            chunk_size: Size of chunks to use for streaming
 
         Returns:
-            True if download was successful, False otherwise
+            bool: True if download succeeded, False otherwise
         """
-        # Respect rate limits
-        self._respect_rate_limits()
-
         try:
-            # Make sure the directory exists
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-            # Stream the download
-            with self._client.stream("GET", url) as response:
-                response.raise_for_status()
-
-                # Write to file
+            response = self.get(url, stream=True)
+            if response.status_code == 200:
                 with open(file_path, "wb") as f:
                     for chunk in response.iter_bytes(chunk_size=chunk_size):
-                        if chunk:
-                            f.write(chunk)
-
-            # Update last request time
-            self._last_request_time = time.time()
-
-            return True
-        except Exception as e:
-            logger.error(f"Error downloading {url} to {file_path}: {e}")
-            # Clean up partial download if it exists
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                except Exception as rm_err:
-                    logger.error(
-                        f"Failed to remove partial download {file_path}: {rm_err}"
-                    )
+                        f.write(chunk)
+                return True
             return False
+        except Exception as e:
+            logger.error(f"Error downloading file {url}: {e}")
+            return False
+
+    def get_page_content(
+        self, url: str, wait_for_js: bool = False, scroll: bool = False
+    ) -> Tuple[str, Dict[str, List[str]]]:
+        """
+        Get the content of a page.
+
+        Args:
+            url: URL of the page to get
+            wait_for_js: Whether to wait for JavaScript (not applicable for this handler)
+            scroll: Whether to scroll the page (not applicable for this handler)
+
+        Returns:
+            Tuple[str, Dict[str, List[str]]]: HTML content and resources
+        """
+        try:
+            # Make the request
+            response = self.get(url)
+
+            # Check if successful
+            if response.status_code != 200:
+                logger.warning(f"Got status code {response.status_code} for {url}")
+                return "", {}
+
+            # Get content
+            html_content = response.text
+
+            # Extract resources
+            from web_grabber.lib.browser_automation.base import BrowserAutomation
+
+            resources = BrowserAutomation.get_resources(url, html_content)
+
+            return html_content, resources
+        except Exception as e:
+            logger.error(f"Error getting page content for {url}: {e}")
+            return "", {}
+
+    def get_file_type(self, url: str) -> str:
+        """
+        Determine the file type from a URL.
+
+        Args:
+            url: URL to analyze
+
+        Returns:
+            str: File type category ('html', 'images', 'documents', 'videos', or 'skip')
+        """
+        from web_grabber.lib.browser_automation.base import BrowserAutomation
+
+        return BrowserAutomation.get_file_type(url)

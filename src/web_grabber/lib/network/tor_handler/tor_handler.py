@@ -2,7 +2,7 @@
 
 import logging
 import socket
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 import requests
 import socks
@@ -87,17 +87,67 @@ class TorHandler(NetworkHandler):
 
     def get_current_ip(self) -> Optional[str]:
         """
-        Get current external IP address as seen through Tor.
+        Get the current IP address as seen through Tor.
 
         Returns:
-            Optional[str]: IP address or None if error
+            Optional[str]: Current IP address, or None if it couldn't be retrieved
         """
         try:
             response = self.get("https://api.ipify.org")
             return response.text.strip()
         except Exception as e:
-            logger.error(f"Error getting current IP: {e}")
+            logger.error(f"Failed to get current IP: {e}")
             return None
+
+    def get_file_type(self, url: str) -> str:
+        """
+        Determine the file type from a URL.
+
+        Args:
+            url: URL to analyze
+
+        Returns:
+            str: File type category ('html', 'images', 'documents', 'videos', or 'skip')
+        """
+        from web_grabber.lib.browser_automation.base import BrowserAutomation
+
+        return BrowserAutomation.get_file_type(url)
+
+    def get_page_content(
+        self, url: str, wait_for_js: bool = False, scroll: bool = False
+    ) -> Tuple[str, Dict[str, List[str]]]:
+        """
+        Get the page content and related resources from a URL.
+
+        Args:
+            url: URL to request
+            wait_for_js: Whether to wait for JavaScript to load
+            scroll: Whether to scroll the page
+
+        Returns:
+            Tuple[str, Dict[str, List[str]]]: The page content and related resources
+        """
+        try:
+            # Make the request
+            response = self.get(url)
+
+            # Check if successful
+            if response.status_code != 200:
+                logger.warning(f"Got status code {response.status_code} for {url}")
+                return "", {}
+
+            # Get content
+            html_content = response.text
+
+            # Extract resources
+            from web_grabber.lib.browser_automation.base import BrowserAutomation
+
+            resources = BrowserAutomation.get_resources(url, html_content)
+
+            return html_content, resources
+        except Exception as e:
+            logger.error(f"Error getting page content for {url}: {e}")
+            return "", {}
 
 
 # Legacy compatibility functions

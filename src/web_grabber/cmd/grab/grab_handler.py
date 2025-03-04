@@ -7,7 +7,7 @@ import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from web_grabber.lib.browser_automation import (
     BrowserAutomation,
@@ -33,6 +33,13 @@ class GrabHandler:
         self.resource_count = {"html": 0, "images": 0, "documents": 0, "videos": 0}
         self.network_handler: Optional[NetworkHandler] = None
         self.output_path: Optional[Path] = None
+        self.javascript = True
+        self.scroll = True
+        self.resources = True
+        self.links = True
+        self.max_depth = 100
+        self.restrict_domain = True
+        self.debug = False
 
     def setup(
         self,
@@ -46,6 +53,13 @@ class GrabHandler:
         timeout: int = 30,
         delay: float = 0.5,
         retry_failed: bool = False,
+        javascript: bool = True,
+        scroll: bool = True,
+        resources: bool = True,
+        links: bool = True,
+        max_depth: int = 100,
+        restrict_domain: bool = True,
+        debug: bool = False,
     ) -> None:
         """
         Set up the grab handler.
@@ -61,12 +75,28 @@ class GrabHandler:
             timeout: Request timeout in seconds
             delay: Delay between requests in seconds
             retry_failed: Whether to retry previously failed URLs
+            javascript: Whether to wait for JavaScript to execute
+            scroll: Whether to scroll the page
+            resources: Whether to download resources
+            links: Whether to follow links
+            max_depth: Maximum crawl depth
+            restrict_domain: Whether to restrict crawling to the same domain
+            debug: Whether to enable debug logging
         """
         # Reset state
         self.already_visited = set()
         self.to_visit = set([url])
         self.failed_urls = set()
         self.resource_count = {"html": 0, "images": 0, "documents": 0, "videos": 0}
+
+        # Set crawling options
+        self.javascript = javascript
+        self.scroll = scroll
+        self.resources = resources
+        self.links = links
+        self.max_depth = max_depth
+        self.restrict_domain = restrict_domain
+        self.debug = debug
 
         # Set up output directory
         self.output_path = Path(output_dir)
@@ -95,20 +125,56 @@ class GrabHandler:
 
     def _load_failed_urls(self) -> None:
         """Load previously failed URLs from file."""
-        if not self.output_path:
-            return
+        failed_urls_file = Path(self.output_path) / "failed_urls.txt"
+        if failed_urls_file.exists():
+            try:
+                with open(failed_urls_file, "r") as f:
+                    for line in f:
+                        url = line.strip()
+                        if url:
+                            self.failed_urls.add(url)
+                logger.info(f"Loaded {len(self.failed_urls)} failed URLs")
+            except Exception as e:
+                logger.error(f"Error loading failed URLs: {e}")
 
-        failed_urls_path = self.output_path / "failed_urls.txt"
-        if failed_urls_path.exists():
-            with open(failed_urls_path, "r") as f:
-                prev_failed_urls = f.read().splitlines()
-                prev_failed_urls = [
-                    url.strip() for url in prev_failed_urls if url.strip()
-                ]
-                logger.info(
-                    f"Loaded {len(prev_failed_urls)} previously failed URLs for retry"
-                )
-                self.to_visit.update(prev_failed_urls)
+    def _should_process_url(self, url: str) -> bool:
+        """
+        Check if a URL should be processed based on various conditions.
+
+        Args:
+            url: URL to check
+
+        Returns:
+            bool: True if the URL should be processed, False otherwise
+        """
+        # Skip empty or invalid URLs
+        if not url or not url.startswith(("http://", "https://")):
+            return False
+
+        # Skip already visited URLs
+        if url in self.already_visited:
+            return False
+
+        # Skip if we've hit the max depth (only for links from pages we've already visited)
+        if (
+            hasattr(self, "max_depth")
+            and self.max_depth
+            and len(self.already_visited) >= self.max_depth
+        ):
+            return False
+
+        # Skip URLs not in our allowed domains (if we have a restriction)
+        if hasattr(self, "restrict_domain") and self.restrict_domain:
+            from web_grabber.lib.network.base import NetworkHandler
+
+            initial_url = list(self.to_visit)[0] if self.to_visit else None
+            if initial_url:
+                domain = NetworkHandler.extract_domain(url)
+                base_domain = NetworkHandler.extract_domain(initial_url)
+                if domain != base_domain:
+                    return False
+
+        return True
 
     def download_file(self, url: str, resource_type: str) -> bool:
         """
@@ -265,7 +331,7 @@ class GrabHandler:
         try:
             # Get page content and resources
             html_content, resources = self.network_handler.get_page_content(
-                url, wait_for_js=self.args.javascript, scroll=self.args.scroll
+                url, wait_for_js=self.javascript, scroll=self.scroll
             )
 
             # First determine if the URL itself is a resource
@@ -300,17 +366,17 @@ class GrabHandler:
                 logger.warning(f"No HTML content retrieved from: {url}")
 
             # Process resources if requested
-            if self.args.resources:
+            if self.resources:
                 self._process_resources(url, resources)
 
             # Process links if requested
-            if self.args.links:
+            if self.links:
                 links = BrowserAutomation.get_page_links(url, html_content)
                 self._process_links(url, links)
 
         except Exception as e:
             logger.error(f"Error processing URL {url}: {e}")
-            if self.args.debug:
+            if self.debug:
                 import traceback
 
                 logger.debug(traceback.format_exc())
@@ -577,3 +643,51 @@ class GrabHandler:
             "failed_urls": len(self.failed_urls),
             "resources": dict(self.resource_count),
         }
+
+    def _process_resources(
+        self, base_url: str, resources: Dict[str, List[str]]
+    ) -> None:
+        """
+        Process and download resources from a page.
+
+        Args:
+            base_url: Base URL of the page
+            resources: Dictionary of resource types and URLs
+        """
+        for resource_type, urls in resources.items():
+            for url in urls:
+                try:
+                    # Skip already visited URLs
+                    if url in self.already_visited:
+                        continue
+
+                    # Mark as visited to avoid reprocessing
+                    self.already_visited.add(url)
+
+                    # Download the resource
+                    self.download_file(url, resource_type)
+                except Exception as e:
+                    logger.error(f"Error processing resource {url}: {e}")
+                    if self.debug:
+                        import traceback
+
+                        logger.debug(traceback.format_exc())
+                    self.failed_urls.add(url)
+
+    def _process_links(self, base_url: str, links: List[str]) -> None:
+        """
+        Process links found on a page.
+
+        Args:
+            base_url: Base URL of the page
+            links: List of links found on the page
+        """
+        for link in links:
+            # Skip already visited or queued links
+            if link in self.already_visited or link in self.to_visit:
+                continue
+
+            # Check if the link should be processed
+            if self._should_process_url(link):
+                # Add to queue for processing
+                self.to_visit.add(link)

@@ -82,6 +82,13 @@ def grab_command(
         timeout=timeout,
         delay=delay,
         retry_failed=retry_failed,
+        javascript=True,
+        scroll=True,
+        resources=True,
+        links=True,
+        max_depth=depth,
+        restrict_domain=True,
+        debug=verbose,
     )
 
     # Start the crawl process
