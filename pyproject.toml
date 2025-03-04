@@ -1,23 +1,22 @@
 [project]
 name = "web-grabber"
-version = "0.5.9"
-description = "Add your description here"
+version = "0.5.10"
+description = "A powerful CLI tool for crawling websites and downloading content including HTML, images, and videos. Features multiple browsing modes including normal requests, Selenium for JavaScript rendering, and camoufox for anti-bot protection."
 authors = [
     { name = "Tadeas Fort", email = "business@tadeasfort.com" }
 ]
 dependencies = [
     "camoufox[geoip]>=0.4.11",
-    "typer>=0.15.2",
+    "typer>=0.15.2", 
     "selenium>=4.29.0",
     "requests>=2.28.1",
     "beautifulsoup4>=4.11.1",
     "PySocks>=1.7.1",
     "urllib3>=1.26.12",
-    "rich>=12.6.0",
-    # For CLI enhancements
+    "rich>=12.6.0"
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.10"
 license = { text = "GPL-3.0" }
 
 [build-system]
