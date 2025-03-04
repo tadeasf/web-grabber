@@ -83,6 +83,8 @@ platformdirs==4.3.6
     # via camoufox
 playwright==1.50.0
     # via camoufox
+prompt-toolkit==3.0.50
+    # via web-grabber
 propcache==0.3.0
     # via aiohttp
     # via yarl
@@ -140,6 +142,8 @@ urllib3==2.3.0
     # via requests
     # via selenium
     # via web-grabber
+wcwidth==0.2.13
+    # via prompt-toolkit
 websocket-client==1.8.0
     # via selenium
 wsproto==1.2.0
