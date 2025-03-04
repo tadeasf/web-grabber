@@ -111,7 +111,7 @@ class GrabHandler:
                 )
         elif httpx:
             try:
-                from web_grabber.lib.network.httpx_handler import HttpxHandler
+                from web_grabber.lib.network.http_handler import HttpxHandler
 
                 logger.info("Using httpx for network requests")
                 self.network_handler = HttpxHandler(

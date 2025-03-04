@@ -2,6 +2,7 @@ import logging
 from typing import Dict, List, Set, Tuple
 
 import requests
+
 from web_grabber.lib.browser_automation.base import BrowserAutomation
 
 logger = logging.getLogger(__name__)
